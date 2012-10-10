@@ -127,6 +127,41 @@ class IpythonExecCommand(sublime_plugin.TextCommand):
         return []
 
 
+class IpythonInsertFromHistoryCommand(sublime_plugin.TextCommand):
+    def run(self, edit):
+        self.view.window().show_input_panel(
+                        "iPython input number",
+                        "",
+                        self.input_callback,
+                        None,
+                        None
+                    )
+        self.edit = edit
+
+    def input_callback(self, input_str):
+        if input_str is None or input_str.strip() == "":
+            return
+        try:
+            n = int(input_str)
+        except Exception:
+            error("Please input a number!")
+            return
+        km = initialize_km()
+        msg_id = km.shell_channel.history(hist_access_type="range", start=n, stop=n + 1, session=0)
+        response = get_response(km, msg_id)
+        history = response[0]['content']['history']
+        if history:
+            code = history[0][2]
+        else:
+            error("History entry %i not found in current session" % n)
+            return
+
+        e = self.view.begin_edit()
+        for r in self.view.sel():
+            self.view.insert(e, r.a, code)
+        self.view.end_edit(e)
+
+
 class IpythonMagicInfoCommand(sublime_plugin.TextCommand):
     def run(self, edit):
         sel = self.view.sel()
@@ -151,4 +186,3 @@ class IpythonMagicInfoCommand(sublime_plugin.TextCommand):
         self.view.window().run_command(
             "show_panel", {"panel": "output.ipython_object_info"})
         self.view.window().focus_view(out_view)
-
