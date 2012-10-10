@@ -23,6 +23,9 @@ import sublime_plugin
 
 # utils
 
+def error(msg):
+    sublime.message_dialog(msg)
+
 
 def check_port_open(ip, port):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -35,16 +38,31 @@ def check_port_open(ip, port):
     return status
 
 
-def find_allive_server():
+def find_alive_server():
+    POSSIBLE_DIRECTORIES = [
+        '~/.config/ipython/profile_default/security',
+        '~/.ipython/profile_default/security'
+    ]
+
     # assuming we are using default profile
-    security_dir = expanduser('~/.config/ipython/profile_default/security')
-    all_json_files = listdir(security_dir)
-    for json_file in all_json_files:
-        with open(join(security_dir, json_file)) as f:
-            cfg = loads(f.read())
-        ip, port = cfg['ip'], cfg['shell_port']
-        if check_port_open(ip, port):
-            return cfg
+    def search_security_dir(path):
+        security_dir = expanduser(path)
+        all_json_files = listdir(security_dir)
+        for json_file in all_json_files:
+            with open(join(security_dir, json_file)) as f:
+                cfg = loads(f.read())
+            ip, port = cfg['ip'], cfg['shell_port']
+            if check_port_open(ip, port):
+                return cfg
+        return None
+
+    for d in POSSIBLE_DIRECTORIES:
+        result = search_security_dir(d)
+        if result:
+            break
+    if result is None:
+        error("Could not find iPython connection files in any of the following directories:\n\n %s" % "\n".join(POSSIBLE_DIRECTORIES))
+    return result
 
 
 # text processing
@@ -58,8 +76,8 @@ def strip_color_escapes(s):
     strip = re.compile('\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]')
     return strip.sub('', s)
 
-
 # initialize kernel functions
+
 
 def km_from_cfg(cfg):
     km = BlockingKernelManager(**cfg)
@@ -69,7 +87,7 @@ def km_from_cfg(cfg):
 
 
 def initialize_km():
-    cfg = find_allive_server()
+    cfg = find_alive_server()
     if not cfg:
         return
     return km_from_cfg(cfg)
